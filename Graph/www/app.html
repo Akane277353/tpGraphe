@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>App</title>
+	<script type="text/javascript" src = "./src/Graph.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.5.0/socket.io.js"></script>
+</head>
+<body onload="setup()">
+	<canvas id="sketch"></canvas>
+	<p style="position: absolute; top: 0px; left: 0px; width: 100px; height: 30px;"><a href="."><button>Accueil !</button> </a><p/>
+</body>
+</html>
+
+<style type="text/css">
+	*{
+		margin: 0;
+		padding: 0;
+		width: 100%;
+		height: 100%;
+	}
+	body{
+		width: 100%;
+		height: 100%;
+	}
+	canvas{
+		width: 100%;
+		height: 100%;
+	}
+</style>
+<script type="text/javascript">
+
+	const raisonR = 300;
+	const rayonProfil = 10;
+
+	var canvas = document.getElementById('sketch');
+	var ctx;
+	let w = 100;
+	let h = 100;
+	let pseudo = null;
+	let data = setupGraph();
+	let tempo = 0;
+
+	let offX = 0;
+	let offY = 0;
+
+	let keys = [0,0,0,0];
+	document.onkeyup = checkKeyUp;
+	document.onkeydown = checkKeyDown;
+	var socket = io();
+	let start = true;
+
+	socket.on("Noeu",function(res){
+		addNeux(data,res[0],res[1]);
+	});
+	socket.on("Link",function(res){
+		link(data,res[0],res[1],res[2]);
+	});
+	
+
+	function setup() {
+		w = window.innerWidth;
+		h = window.innerHeight;
+		console.log(w,h);
+		canvas.height = h;
+		canvas.width = w;
+		ctx = canvas.getContext('2d');
+		ctx.fillStyle = 'white';
+		ctx.fillRect(0,0,w,h);
+		pseudo = getCookie("pseudo");
+		if (pseudo == null) {
+			document.location.href="."; 
+		} else {
+			if (start) {
+				socket.emit("search",pseudo);
+				start = false;
+			}
+			
+			const MaxSetData = 10;
+			
+			if (estVide(data)) {
+				setTimeout(setup,500);
+				ctx.fillStyle = 'white';
+				ctx.fillRect(0,0,w,h);
+
+				let txt = "loading";
+				for (var i = 0; i <= tempo%3; i++) {
+					txt = txt + " .";
+				}
+				ctx.fillStyle = 'black';
+				ctx.font = '48px serif';
+				ctx.fillText(txt, w/2-75,h/2);
+
+				tempo = tempo +1;
+			} else {
+				setInterval(draw,100);
+			}
+			
+		}
+	}
+
+	function draw() {
+		ctx.fillStyle = 'white';
+		ctx.fillRect(0,0,w,h);
+		ctx.setTransform();
+		ctx.translate(offX,offY);
+
+		if (data == null || estVide(data)) {
+			//console.log("loading !");
+			let txt = "loading";
+			for (var i = 0; i <= tempo%3; i++) {
+				txt = txt + " .";
+			}
+			ctx.fillStyle = 'black';
+			ctx.font = '48px serif';
+			ctx.fillText(txt, w/2-75,h/2);
+		} else {
+
+			drawGraph(data);
+			let v = 10;
+			if (keys[0] == 1) {
+				offY = offY - 10;
+			}
+			if (keys[1] == 1) {
+				offY = offY + 10;
+			}
+			if (keys[2] == 1) {
+				offX = offX - 10;
+			}
+			if (keys[3] == 1) {
+				offX = offX + 10;
+			}
+		}
+		ctx.resetTransform();
+		
+		tempo = tempo + 1;
+	}
+
+
+	
+	
+	
+	
+
+	
+
+	/*####################################################
+	Draw Element
+	####################################################*/
+	function drawProfil(p,x,y) {
+		let name = getNeuName(p);
+		let data = getNeuData(p);
+		cercleF(ctx,x,y,rayonProfil,data.color);
+		ctx.lineWidth=2; 
+		cercleS(ctx,x,y,rayonProfil,[0,0,0]);
+		ctx.textAlign = "center";
+
+		
+		// ctx.fillStyle = 'white';
+		// ctx.font = '21px serif';
+		// ctx.fillText(name, x,y+ rayonProfil*1.2);
+		ctx.strokeStyle = 'black';
+		ctx.font = '12px serif ';
+		ctx.lineWidth=0.9;
+		ctx.strokeText(name, x,y+ rayonProfil*1.2);
+
+	}
+
+	function affLinks(tab,Graph,link,c) {
+		
+		for (var i = 0; i < tab.length; i++) {
+			let links = GetLinksByType(Graph,getNeuName(tab[i][0]),link);
+			for (var j = 0; j < tab.length; j++) {
+				for (var l = 0; l < links.length; l++) {
+					if (getNeuName(tab[j][0]) == getNeuName(links[l][1]) && links[l][0] == link) {
+
+						ctx.lineWidth=3; 
+						ctx.strokeStyle = tabToColor([0,0,0]);
+						ctx.beginPath();
+						ctx.moveTo(tab[i][1][0],tab[i][1][1]);
+						ctx.lineTo(tab[j][1][0],tab[j][1][1]);
+						ctx.stroke();
+						ctx.lineWidth=2; 
+
+
+						ctx.strokeStyle = tabToColor(c);
+						ctx.beginPath();
+						ctx.moveTo(tab[i][1][0],tab[i][1][1]);
+						ctx.lineTo(tab[j][1][0],tab[j][1][1]);
+						ctx.stroke();
+
+						
+						
+						
+					}
+				}
+			}
+		}
+	}
+
+	function drawGraph(Graph){
+		let p = Graph[0][0];
+		let vu = [[p,[w/2,h/2],[0,360],50]];
+		;
+		let min = 0;
+		let max = w;
+		let r = raisonR;
+		for (var n = 0; n < vu.length; n++) {
+			let ls = GetLinks(Graph,getNeuName(vu[n][0]));
+			min = vu[n][2][0];
+			max = vu[n][2][1];
+			r = vu[n][3]+raisonR;
+			let lsTemp = [];
+			for (var i = 0; i < ls.length; i++) {
+				p = ls[i][1];
+				if (NeuInTab(p,vu) == false) {
+					lsTemp.push(ls[i]);
+				}
+			}
+			ls = lsTemp;
+			for (var i = 0; i < ls.length; i++) {
+				p = ls[i][1];
+				
+				let pas = Math.floor((max-min) / (ls.length))+1;
+				let teta = pas*i + Math.floor(pas*0.5)+min;
+				let point = PolarToPoint(r,DegToRad(teta));
+
+				let x = point[0]+w/2;
+				let y = point[1]+h/2;
+
+				let minS = pas*i+min;
+				let maxS = minS + pas;
+				//drawProfil(p,x,y);
+				vu.push([p,[x,y],[minS,maxS],r]);
+			}
+		}
+		
+		affLinks(vu,Graph,"Following",[0,0,255]);
+		affLinks(vu,Graph,"Follower",[255,0,0]);
+		affLinks(vu,Graph,"Amis",[0,255,0]);
+
+		for (var i = 0; i < vu.length; i++) {
+			drawProfil(vu[i][0],vu[i][1][0],vu[i][1][1]);
+		}
+
+	}
+
+	
+
+	/*####################################################
+	Draw Base
+	####################################################*/
+
+
+	function tabToColor(c) {
+		if (c.length == 3) {
+			return "rgb("+c[0]+","+c[1]+","+c[2]+")";
+		}else if(c.length == 4){
+			return "rgba("+c[0]+","+c[1]+","+c[2]+","+c[3]+")";
+		}else{
+			return "rgb("+c[0]+","+c[0]+","+c[0]+")";
+		}
+	}
+	function cercleS(ctx,x,y,r,c){
+		ctx.save();
+		ctx.strokeStyle = tabToColor(c);
+		ctx.beginPath();
+		ctx.arc(x, y, r, 0, Math.PI * 2, true);
+		ctx.stroke();
+		ctx.restore();
+	}
+	function cercleF(ctx,x,y,r,c){
+		ctx.save();
+		ctx.fillStyle = tabToColor(c);
+		ctx.beginPath();
+		ctx.arc(x, y, r, 0, Math.PI * 2, true);
+		ctx.fill();
+		ctx.restore();
+	}
+
+	
+
+	/*####################################################
+	Function
+	####################################################*/
+
+	function NeuInTab(neu , tab){
+		let res = false;
+		for (var i = 0; i < tab.length && res == false; i++) {
+			if(tab[i][0] == neu){
+				res = true;
+			}
+		}
+		return res;
+	}
+
+	function checkKeyUp(e) {
+
+	    e = e || window.event;
+
+	    if (e.keyCode == '38') {
+	        keys[0] = 0;
+	    }
+	    else if (e.keyCode == '40') {
+	        keys[1] = 0;
+	    }
+	    else if (e.keyCode == '37') {
+	      	keys[2] = 0;
+	    }
+	    else if (e.keyCode == '39') {
+	       	keys[3] = 0;
+	    }
+
+	}
+	function checkKeyDown(e) {
+
+	    e = e || window.event;
+
+	    if (e.keyCode == '38') {
+	        keys[0] = 1;
+	    }
+	    else if (e.keyCode == '40') {
+	        keys[1] = 1;
+	    }
+	    else if (e.keyCode == '37') {
+	      	keys[2] = 1;
+	    }
+	    else if (e.keyCode == '39') {
+	       	keys[3] = 1;
+	    }
+
+	}
+
+
+	function getCookie(name){
+     if(document.cookie.length == 0)
+       return null;
+
+     var regSepCookie = new RegExp('(; )', 'g');
+     var cookies = document.cookie.split(regSepCookie);
+
+     for(var i = 0; i < cookies.length; i++){
+       var regInfo = new RegExp('=', 'g');
+       var infos = cookies[i].split(regInfo);
+       if(infos[0] == name){
+         return unescape(infos[1]);
+       }
+     }
+     return null;
+   }
+
+   function GraphTest(n) {
+		function randint(min,max) {
+			return Math.floor(Math.random()*(max-min)+min);
+		}
+
+		let graphTest = setupGraph();
+		let user = [];
+		for (var i = 0; i < n; i++) {
+			user.push(""+i);
+		}
+
+		for (var i = 0 ; i < user.length; i++) {
+			graphTest = addNeux(graphTest,user[i],{
+				color:[randint(0,255),randint(0,255),randint(0,255)]
+			});
+
+			user[i] = [user[i],{
+				color:[randint(0,255),randint(0,255),randint(0,255)]
+			}];
+
+		}
+		let links = [];
+		for (var i = 0 ; i < user.length*1.5; i++) {
+			let a = ""+ randint(0,user.length);
+			let b = ""+ randint(0,user.length);
+			links.push([a,b]);
+			graphTest = link(graphTest,a,b,"Amis");
+		}
+
+		return graphTest
+	}
+
+
+	/*####################################################
+	Math
+	####################################################*/
+
+	//Points
+	function setPoint(x,y) {
+		return [x,y];
+	}
+	function PointToPolar(p) {
+		let res = CartToPolar(p[0],p[1]);
+		return CartToPolar(p[0],p[1]);
+	}
+	function PolarToPoint(r,teta) {
+		return PolarToCart(r,teta);	
+	}
+
+	function PolarToCart(r,teta) {
+		let x = Math.round(Math.cos(teta)*r);
+		let y = Math.round(Math.sin(teta)*r);
+		return [x,y];
+	}
+
+	function DegToRad(angle) {
+		return angle*Math.PI/180;
+	}
+</script>

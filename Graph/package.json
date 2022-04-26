@@ -1,0 +1,13 @@
+{
+  "dependencies": {
+    "cookie-parser": "^1.4.6",
+    "express": "^4.17.3",
+    "formidable": "^2.0.1",
+    "fs": "^0.0.1-security",
+    "http": "^0.0.1-security",
+    "puppeteer-core": "^13.6.0",
+    "requirejs": "^2.3.6",
+    "socket-io": "^1.0.0",
+    "socket.io": "^4.5.0"
+  }
+}
