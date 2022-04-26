@@ -162,8 +162,8 @@ function SocTracker(socket) {
         // for (var i = 0; i < Data[1].length; i++) {
         //     sendLink(socket,Data[1][i][0],Data[1][i][1],Data[1][i][2]);
         // }
-        let pseudo = "pepito_.sama";
-        //let pseudo = "quentinurbex";
+        //let pseudo = "pepito_.sama";
+        let pseudo = "quentinurbex";
         init(socket,pseudo);
         
         
@@ -252,7 +252,7 @@ async function scroll(page)
       document.querySelector('div[class="PZuss"]').scrollIntoView(false);
     });
   }catch (e){
-    console.log(e)
+    console.log("processing...")
   }
 }
 
@@ -350,7 +350,7 @@ async function getFriendFrom2l(pseudo, liste1, liste2){
             }
         }
     }catch (e){
-        console.log(e)
+        console.log("processing...")
     }
     return friend
 }
@@ -368,17 +368,15 @@ async function getFriend(tab){
 
 async function addFriendListe(liste, tab, pseudo){
     console.log("addFriendListe")
-    var newL = {tab:[], lFriends:[]}
     var amis = await getFriend(tab.lFriends)
     for (var i = 0; i < amis.length; i++){
         for (var j = 0; j < liste.tab.length; j++){
             if (amis[i] == liste.tab[j][0]){
-                newL.tab.push(liste.tab[j])
-                newL.lFriends.push([pseudo, amis[i], "Amis"])
+                liste.lFriends.push([pseudo, amis[i], "Amis"])
             }
         }
     }
-    return newL
+    return liste
 }
 
 async function beautify(tab, liste){
@@ -396,20 +394,33 @@ async function beautify(tab, liste){
     return tab
 }
 
+
 async function info(browser, page, url){
     var lFollowers = []
     var lFollowing = []
-
+    private = false
     try {
-        lFollowers = await getInfo(browser, page, url, 1)
-    } catch (e){
-        console.log(e)
-    }
+        private = await checkPrivate(browser, page, url)
+      }catch (e){
+        console.log("processing...")
+      }
 
-    try {
-        lFollowing = await getInfo(browser, page, url, 2)
-    } catch (e){
-        console.log(e)
+    if (! private){
+        try {
+            lFollowers = await getInfo(browser, page, url, 1)
+        } catch (e){
+            console.log("processing...")
+        }
+
+        try {
+            lFollowing = await getInfo(browser, page, url, 2)
+        } catch (e){
+            console.log("processing...")
+        }
+    } else {
+        liste = []
+        lfollowers = [].push(liste)
+        lFollowing = [].push(liste)
     }
     return {lFollowers, lFollowing}
 }
@@ -451,76 +462,63 @@ async function getImg(browser, page){
     });
     return info;
 }
-async function scrapInsta(browser, page, pseudo,socket) {
+
+async function scrapInsta(browser, page, pseudo) {
 
     var url = "https://www.instagram.com/" + pseudo + "/"
 
     await page.goto(url);
     
-    var tab = [[pseudo,[getImg(browser, page),[randint(0, 255), randint(0, 255), randint(0, 255)]]]]
+    var tab = [[pseudo, [await getImg(browser, page), [randint(0, 255), randint(0, 255), randint(0, 255)]]]]
     var lFriends = []
-
-    var private = false
-
-    try {
-        private = await checkPrivate(browser, page, url)
-    }catch (e){
-        console.log(e)
-    }
-    if (! private){
 
         var {lFollowers, lFollowing} = await info(browser, page, url)
 
-
         tab = await beautify(tab, lFollowers.liste)
         tab = await beautify(tab, lFollowing.liste)
-        for (var i = 0; i < tab.length; i++) {
-            sendNoeu(socket,tab[i][0],{
-                color:tab[i][1][1],
-                img:tab[i][1][0]
-            });
-        }
+
+        // SEND
 
         lFriends = await getFriendFrom2l(pseudo, lFollowers.liste, lFollowing.liste)
         lFriends = await follow(lFriends, lFollowers.liste, pseudo)
-        lFriends = await follow(lFriends, lFollowing.liste, pseudo)
-        
-        for (var i = 0; i < lFriends.length; i++) {
-            sendLink(socket,lFriends[i][0],lFriends[i][1],lFriends[i][2]);
-        }
-    }
+        lFriends = await following(lFriends, lFollowing.liste, pseudo)
+        // SEND
+    
     console.log("terminado")
     return {tab, lFriends}
 }
 
 
-async function getAll(browser, page, liste,socket){
+async function getAll(browser, page, liste, socket){
     console.log("getAll")
     try {
         var amis = await getFriend(liste.lFriends)
         for (var i = 0; i < amis.length; i++){
             try {
                 friend = await scrapInsta(browser, page, amis[i])
-                var add = await addFriendListe(liste, friend, amis[i])
-                console.log(add)
+                liste = await addFriendListe(liste, friend, amis[i])
+                console.log(liste)
                 
-                // for (var i = 0; i < tab.length; i++) {
-                //     sendNoeu(socket,tab[i][0],{
-                //         color:tab[i][1][1],
-                //         img:tab[i][1][0]
-                //     });
-                // }
+                let tab = liste.tab;
+                let lFriends = liste.lFriends;
 
-                // for (var i = 0; i < lFriends.length; i++) {
-                //     sendLink(socket,lFriends[i][0],lFriends[i][1],lFriends[i][2]);
-                // }
+                for (var j = 0; j < tab.length; j++) {
+                    sendNoeu(socket,tab[j][0],{
+                        color:tab[j][1][1],
+                        img:tab[j][1][0]
+                    });
+                }
+
+                for (var j = 0; j < lFriends.length; j++) {
+                    sendLink(socket,lFriends[j][0],lFriends[j][1],lFriends[j][2]);
+                }
             } catch (e){
-                console.log(e)
+                console.log("processing...")
             }
         }
 
     } catch (e){
-        console.log(e)
+        console.log("processing...")
     }
     return 0
 }
@@ -535,17 +533,31 @@ async function init(socket,pseudo){
 
     try {
         friend = await scrapInsta(browser, page, pseudo,socket)
+        let tab = friend.tab;
+
+                let lFriends = friend.lFriends;
+
+                for (var i = 0; i < tab.length; i++) {
+                    sendNoeu(socket,tab[i][0],{
+                        color:tab[i][1][1],
+                        img:tab[i][1][0]
+                    });
+                }
+
+                for (var i = 0; i < lFriends.length; i++) {
+                    sendLink(socket,lFriends[i][0],lFriends[i][1],lFriends[i][2]);
+                }
     } catch (e){
-        console.log(e)
+        console.log("processing...")
     }
 
     try {
         console.log("try")
        ok = await getAll(browser, page, friend,socket)
     } catch (e){
-        console.log(e)
+        console.log("processing...")
     }
-    console.log("terminado")
+    console.log("fin")
 
     await closeBrowser(browser);
 }
